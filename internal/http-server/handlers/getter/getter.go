@@ -33,6 +33,9 @@ type Response struct {
 }
 
 func FetchWallet(log *slog.Logger, getterWallet GetterWallet) http.HandlerFunc {
+	if log == nil {
+        log = slog.Default() // Используем дефолтный логгер, если передан nil
+    }
 	return func(w http.ResponseWriter, r *http.Request) {
 		const fn = "handlers.getter.FetchWallet"
 
@@ -44,7 +47,7 @@ func FetchWallet(log *slog.Logger, getterWallet GetterWallet) http.HandlerFunc {
 		walletUUIDStr := chi.URLParam(r, "WALLET_UUID")
 
 		if walletUUIDStr == "" {
-			log.Info("wallet_uuid is empty")
+			log.Error("wallet_uuid is empty")
 			w.WriteHeader(http.StatusBadRequest)
 			render.JSON(w, r, resp.Error("invalid request"))
 			return
@@ -52,7 +55,7 @@ func FetchWallet(log *slog.Logger, getterWallet GetterWallet) http.HandlerFunc {
 
 		walletUUID, err := uuid.Parse(walletUUIDStr)
 		if err != nil {
-			log.Info("wallet_uuid is invalid")
+			log.Error("wallet_uuid is invalid", slog.String("wallet_uuid", walletUUIDStr))
 			w.WriteHeader(http.StatusBadRequest)
 			render.JSON(w, r, resp.Error("invalid UUID"))
 			return
@@ -69,7 +72,7 @@ func FetchWallet(log *slog.Logger, getterWallet GetterWallet) http.HandlerFunc {
 
 		if err != nil {
 			log.Error("failed to fetch wallet", sl.Err(err))
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(http.StatusNotFound)
 			render.JSON(w, r, resp.Error("failed to fetch wallet"))
 			return
 		}
