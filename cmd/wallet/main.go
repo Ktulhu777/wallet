@@ -16,7 +16,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// fmt.Println("Successfully connected to PostgreSQL")
 func main() {
 	cfg := config.MustLoad()
 
@@ -55,6 +54,7 @@ func main() {
 	router.Post("/api/v1/wallet", transaction.WalletOperation(log, storage))
 
 	log.Info("starting server", slog.String("address", cfg.Address))
+
 
 	srv := &http.Server{
 		Addr:         cfg.Address,

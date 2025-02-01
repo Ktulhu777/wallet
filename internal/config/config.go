@@ -2,8 +2,6 @@ package config
 
 import (
 	"log"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/ilyakaznacheev/cleanenv"
@@ -32,13 +30,7 @@ type Storage struct {
 }
 
 func MustLoad() *Config {
-	wd, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("Error getting current working directory: %v", err)
-	}
-
-	envFilePath := filepath.Join(wd, "..", "..", "config", "config.env")
-
+	var envFilePath string = "./config/config.env"
 	if err := godotenv.Load(envFilePath); err != nil {
 		log.Fatalf("Error loading .env file: %v", err)
 	}
