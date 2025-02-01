@@ -32,7 +32,7 @@
     <tr>
       <td>POST</td>
       <td>/api/v1/wallet</td>
-      <td>Создание или изменение кошелька</td>
+      <td>Изменение кошелька</td>
     </tr>
   </tbody>
 </table>
