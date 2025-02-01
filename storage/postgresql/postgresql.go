@@ -45,10 +45,9 @@ func (sp *StoragePostgresql) GetWallet(wallet_uuid uuid.UUID) (Wallet, error) {
 		return Wallet{}, fmt.Errorf("%s: prepare statement: %w", fn, err)
 	}
 
-	var wallet_id uuid.UUID
-	var balance int
+	var wallet Wallet
 
-	err = stmt.QueryRow(wallet_uuid).Scan(&wallet_id, &balance)
+	err = stmt.QueryRow(wallet_uuid).Scan(&wallet.WalletID, &wallet.Balance)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return Wallet{}, storage.ErrWalletNotFound
@@ -56,8 +55,107 @@ func (sp *StoragePostgresql) GetWallet(wallet_uuid uuid.UUID) (Wallet, error) {
 		return Wallet{}, fmt.Errorf("%s: execute statement: %w", fn, err)
 	}
 
-	return Wallet{
-		WalletID: wallet_id,
-		Balance: balance,
-	}, nil
+	return wallet, nil
+}
+
+
+func (sp *StoragePostgresql) DepositWallet(walletID uuid.UUID, amount int64) (Wallet, error) {
+	const fn = "storage.postgresql.DepositWallet"
+
+	tx, err := sp.db.Begin()
+	if err != nil {
+		return Wallet{}, fmt.Errorf("%s: failed to start transaction: %w", fn, err)
+	}
+
+	stmt, err := tx.Prepare(`
+		UPDATE wallets 
+		SET balance = balance + $1 
+		WHERE wallet_id = $2
+		RETURNING wallet_id, balance;
+	`)
+	if err != nil {
+		tx.Rollback()
+		return Wallet{}, fmt.Errorf("%s: failed to prepare statement: %w", fn, err)
+	}
+
+	var wallet Wallet
+	err = stmt.QueryRow(amount, walletID).Scan(&wallet.WalletID, &wallet.Balance)
+	if err != nil {
+		tx.Rollback()
+		if err == sql.ErrNoRows {
+			return Wallet{}, fmt.Errorf("%s: wallet not found: %w", fn, storage.ErrWalletNotFound)
+		}
+		return Wallet{}, fmt.Errorf("%s: failed to execute statement: %w", fn, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Wallet{}, fmt.Errorf("%s: failed to commit transaction: %w", fn, err)
+	}
+
+	return wallet, nil
+}
+
+
+
+func (sp *StoragePostgresql) WithdrawWallet(walletID uuid.UUID, amount int64) (Wallet, error) {
+	const fn = "storage.postgresql.WithdrawWallet"
+
+	tx, err := sp.db.Begin()
+	if err != nil {
+		return Wallet{}, fmt.Errorf("%s: failed to start transaction: %w", fn, err)
+	}
+
+	stmt, err := tx.Prepare(`
+		UPDATE wallets 
+		SET balance = balance - $1 
+		WHERE wallet_id = $2 AND balance >= $3
+		RETURNING wallet_id, balance;
+	`)
+	if err != nil {
+		tx.Rollback()
+		return Wallet{}, fmt.Errorf("%s: failed to prepare statement: %w", fn, err)
+	}
+
+	ok, err := sp.IsExistsWallet(walletID)
+	if err != nil {
+		return Wallet{}, err
+	}
+	
+	if !ok {
+		return Wallet{}, storage.ErrWalletNotFound
+	}
+
+	var wallet Wallet
+	err = stmt.QueryRow(amount, walletID, amount).Scan(&wallet.WalletID, &wallet.Balance)
+	if err != nil {
+		tx.Rollback()
+		if err == sql.ErrNoRows {
+			return Wallet{}, fmt.Errorf("%s: insufficient funds: %w", fn, storage.ErrInsufficientFunds)
+		}
+		return Wallet{}, fmt.Errorf("%s: failed to execute statement: %w", fn, err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Wallet{}, fmt.Errorf("%s: failed to commit transaction: %w", fn, err)
+	}
+
+	return wallet, nil
+}
+
+
+func (sp *StoragePostgresql) IsExistsWallet(walletID uuid.UUID) (bool, error) {
+	const fn = "storage.postgresql.IsExistsWallet"
+
+	stmt, err := sp.db.Prepare("SELECT EXISTS(SELECT 1 FROM wallets WHERE wallet_id = $1)")
+	if err != nil {
+		return false, fmt.Errorf("%s: prepare statement: %w", fn, err)
+	}
+	var exists bool
+	
+	err = stmt.QueryRow(walletID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("%s: failed to check wallet existence: %w", fn, storage.ErrWalletNotFound)
+	}
+
+	return exists, nil
 }

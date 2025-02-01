@@ -7,6 +7,7 @@ import (
 	"os"
 	"wallet/internal/config"
 	"wallet/internal/http-server/handlers/getter"
+	"wallet/internal/http-server/handlers/transaction"
 	mwLogger "wallet/internal/http-server/middleware/logger"
 	"wallet/internal/lib/logger/sl"
 	"wallet/storage/postgresql"
@@ -51,6 +52,7 @@ func main() {
 
 
 	router.Get("/api/v1/wallets/{WALLET_UUID}", getter.FetchWallet(log, storage))
+	router.Post("/api/v1/wallet", transaction.WalletOperation(log, storage))
 
 	log.Info("starting server", slog.String("address", cfg.Address))
 
